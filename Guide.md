@@ -234,16 +234,27 @@ main.py
 validation.py
  ├─ physics.py
  ├─ data_loader.py
+ ├─ config.py
  └─ logging_config.py
 ```
 
-**Key Point**: `physics.py` and `data_loader.py` are foundational - they have no dependencies on other project modules.
+**Key Point**: `config.py` is the central source of truth for all constants. `physics.py` and `data_loader.py` allow stateless operations.
 
 ---
 
 ## 4. Module Deep-Dive
 
-### 4.1 data_loader.py
+### 4.1 config.py
+
+**Purpose**: Central configuration for all constants and constraints.
+
+- **Physics constants**: `R_SI`, `R_SE`
+- **Optimization targets**: `TARGET_U`, `TOLERANCE`
+- **Computed ranges**: `U_MIN`, `U_MAX`, `R_LAYERS_MIN`, `R_LAYERS_MAX`
+
+**Why**: Eliminates "magic numbers" scatter throughout the codebase. Changing a target U-value in `config.py` automatically updates validation logic, optimization constraints, and report generation.
+
+### 4.2 data_loader.py
 
 **Purpose**: Parse material data from JSON files and normalize inconsistencies.
 
@@ -336,9 +347,11 @@ mat_obj = Material(
 
 ---
 
-### 4.2 physics.py
+### 4.3 physics.py
 
 **Purpose**: Apply ISO 6946 thermal physics and LCA calculations.
+
+This module exposes **standalone functions** for stateless calculations and a `WallAssembly` class for stateful representation.
 
 #### Class: WallAssembly
 
@@ -425,7 +438,7 @@ LCA = -796.0 × 0.045 × 1.0
 
 ---
 
-### 4.3 optimizer.py
+### 4.4 optimizer.py
 
 **Purpose**: Find the wall assembly with minimum LCA that meets U-value constraints.
 
@@ -542,7 +555,7 @@ for (R_in, LCA_in, inner) in inner_combos:
 
 ---
 
-### 4.4 main.py
+### 4.5 main.py
 
 **Purpose**: User interface and orchestration.
 
@@ -592,7 +605,7 @@ Generates professional reports with:
 
 ---
 
-### 4.5 validation.py
+### 4.6 validation.py
 
 **Purpose**: Automated test suite to prove mathematical correctness.
 

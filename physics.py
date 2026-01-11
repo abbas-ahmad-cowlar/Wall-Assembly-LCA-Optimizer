@@ -14,12 +14,9 @@ from dataclasses import dataclass
 from typing import List, Tuple
 from data_loader import Material
 from logging_config import get_logger
+from config import R_SI, R_SE
 
 logger = get_logger(__name__)
-
-# --- ISO 6946 Surface Resistance Constants ---
-R_SI = 0.13  # Interior surface resistance (m²K/W)
-R_SE = 0.04  # Exterior surface resistance (m²K/W)
 
 
 @dataclass
@@ -33,162 +30,119 @@ class WallAssembly:
         layers: List of (Material, thickness) tuples representing each layer.
                Thickness is in meters. Should contain exactly 9 layers for
                a complete wall assembly (inside to outside).
-    
-    Example:
-        >>> wall = WallAssembly(layers=[
-        ...     (gypsum_material, 0.0125),  # Layer 0: 12.5mm gypsum
-        ...     (foil_material, 0.0002),    # Layer 1: 0.2mm foil
-        ...     # ... 7 more layers
-        ... ])
-        >>> u_value = wall.calculate_u_value()
-        >>> lca = wall.calculate_total_lca()
     """
     layers: List[Tuple[Material, float]]  # List of (Material, thickness_in_meters)
 
     def calculate_r_value(self, material: Material, thickness_m: float) -> float:
-        """Calculate thermal resistance for a single layer.
+        """Calculate thermal resistance for a single layer (Instance Wrapper).
         
-        Implements ISO 6946 formula: R = d/λ where:
-        - d = thickness in meters
-        - λ = thermal conductivity in W/(m·K)
-        
-        Special cases:
-        1. Foils (thin materials <1mm with no lambda): R ≈ 0
-        2. Missing lambda with U-ref available: R = 1/U
-        3. No thermal data: R = 0 (shouldn't occur with validated data)
-        
-        Args:
-            material: Material object with thermal properties
-            thickness_m: Layer thickness in meters
-        
-        Returns:
-            Thermal resistance in m²K/W
-            
-        Note:
-            For foils, returns 0.0001 instead of 0 to avoid division by zero
-            in downstream calculations.
+        Delegates to standalone function `calculate_layer_r_value`.
         """
-        if material.is_foil:
-            logger.debug(f"Foil material '{material.name}': R ~= 0")
-            return 0.0001  # Negligible resistance
-        
-        if material.lambda_val:
-            r_value = thickness_m / material.lambda_val
-            logger.debug(f"Material '{material.name}': R = {thickness_m}/{material.lambda_val} = {r_value:.4f}")
-            return r_value
-            
-        if material.u_val_ref:
-            r_value = 1.0 / material.u_val_ref
-            logger.debug(f"Material '{material.name}': Using U-ref, R = 1/{material.u_val_ref} = {r_value:.4f}")
-            return r_value
-        
-        logger.warning(f"Material '{material.name}' has no thermal data, assuming R = 0")
-        return 0.0
+        return calculate_layer_r_value(material, thickness_m)
 
     def calculate_u_value(self) -> float:
         """Calculate total U-value (thermal transmittance) of the assembly.
         
         Implements ISO 6946 formula:
         U = 1 / (R_si + ΣR_layers + R_se)
-        
-        Where:
-        - R_si = 0.13 m²K/W (interior surface resistance)
-        - R_se = 0.04 m²K/W (exterior surface resistance)
-        - ΣR_layers = sum of all material layer resistances
-        
-        Returns:
-            U-value in W/(m²K). Lower values indicate better insulation.
-        
-        Example:
-            >>> wall.calculate_u_value()
-            0.1475  # W/(m²K) - good insulation
         """
-        r_sum = sum(self.calculate_r_value(m, t) for m, t in self.layers)
+        r_sum = sum(calculate_layer_r_value(m, t) for m, t in self.layers)
         r_total = R_SI + r_sum + R_SE
         u_value = 1.0 / r_total
         
         logger.debug(f"U-value calculation: R_total = {R_SI} + {r_sum:.3f} + {R_SE} = {r_total:.3f}")
-        logger.debug(f"U-value = 1/{r_total:.3f} = {u_value:.4f} W/(m²K)")
+        logger.debug(f"U-value = 1/{r_total:.3f} = {u_value:.4f} W/(m**2K)")
         
         return u_value
 
     def calculate_layer_lca(self, material: Material, thickness_m: float) -> float:
-        """Calculate Life Cycle Assessment (A1-A3 GWP) for a single layer.
+        """Calculate Life Cycle Assessment impact for a single layer (Instance Wrapper).
         
-        Calculates environmental impact based on material unit basis.
-        All formulas multiply by material.factor.
-        
-        Formulas:
-        1. Volume basis (m³): Impact = GWP × thickness × factor
-        2. Area basis (m²):   Impact = GWP × factor
-        3. Mass basis (kg):   Impact = GWP × density × thickness × factor
-        
-        Where:
-        - GWP = Global Warming Potential in kg CO₂-eq/<unit>
-        - thickness is in meters
-        - density is in kg/m³
-        - factor is a material-specific multiplier
-        
-        Args:
-            material: Material object with LCA properties
-            thickness_m: Layer thickness in meters
-        
-        Returns:
-            LCA impact in kg CO₂-eq/m² (per square meter of wall)
-            
-        Note:
-            Negative values indicate biogenic carbon storage (e.g., wood products).
-            Zero impact occurs when factor = 0.0 (material excluded from LCA).
+        Delegates to standalone function `calculate_layer_lca_impact`.
         """
-        base_impact = 0.0
-        
-        if material.lca_unit == 'm3':
-            # Impact per cubic meter
-            base_impact = material.gwp_a1a3 * thickness_m
-            logger.debug(
-                f"LCA (m³): {material.name} = {material.gwp_a1a3} × {thickness_m} = {base_impact:.3f}"
-            )
-            
-        elif material.lca_unit == 'm2':
-            # Impact per square meter (thickness independent)
-            base_impact = material.gwp_a1a3 * 1.0
-            logger.debug(f"LCA (m²): {material.name} = {material.gwp_a1a3:.3f}")
-            
-        elif material.lca_unit == 'kg':
-            # Impact per kilogram
-            if material.density:
-                mass_kg = material.density * thickness_m
-                base_impact = material.gwp_a1a3 * mass_kg
-                logger.debug(
-                    f"LCA (kg): {material.name} = {material.gwp_a1a3} × {material.density} × {thickness_m} = {base_impact:.3f}"
-                )
-            else:
-                logger.warning(f"Missing density for kg-based material '{material.name}', impact = 0")
-                base_impact = 0.0
-        
-        final_impact = base_impact * material.factor
-        
-        if material.factor != 1.0:
-            logger.debug(f"Applying factor {material.factor}: {base_impact:.3f} × {material.factor} = {final_impact:.3f}")
-                
-        return final_impact
+        return calculate_layer_lca_impact(material, thickness_m)
 
     def calculate_total_lca(self) -> float:
-        """Calculate total LCA impact for the complete wall assembly.
-        
-        Sums A1-A3 GWP impacts across all 9 layers.
-        
-        Returns:
-            Total LCA impact in kg CO₂-eq/m²
-            
-        Note:
-            Negative total indicates a climate-positive wall assembly where
-            biogenic carbon storage (wood, cellulose) exceeds manufacturing
-            emissions.
-        """
-        total = sum(self.calculate_layer_lca(m, t) for m, t in self.layers)
-        logger.debug(f"Total LCA: {total:.4f} kg CO₂-eq/m²")
+        """Calculate total LCA impact for the complete wall assembly."""
+        total = sum(calculate_layer_lca_impact(m, t) for m, t in self.layers)
+        logger.debug(f"Total LCA: {total:.4f} kg CO2-eq/m**2")
         return total
+
+
+# --- Standalone Calculation Functions (Stateless) ---
+
+def calculate_layer_r_value(material: Material, thickness_m: float) -> float:
+    """Calculate thermal resistance for a single layer.
+    
+    Implements ISO 6946 formula: R = d/λ where:
+    - d = thickness in meters
+    - λ = thermal conductivity in W/(m·K)
+    
+    Args:
+        material: Material object with thermal properties
+        thickness_m: Layer thickness in meters
+    
+    Returns:
+        Thermal resistance in m²K/W
+    """
+    if material.is_foil:
+        # logger.debug(f"Foil material '{material.name}': R ~= 0")
+        return 0.0001  # Negligible resistance
+    
+    if material.lambda_val:
+        r_value = thickness_m / material.lambda_val
+        # logger.debug(f"Material '{material.name}': R = {thickness_m}/{material.lambda_val} = {r_value:.4f}")
+        return r_value
+        
+    if material.u_val_ref:
+        r_value = 1.0 / material.u_val_ref
+        # logger.debug(f"Material '{material.name}': Using U-ref, R = 1/{material.u_val_ref} = {r_value:.4f}")
+        return r_value
+    
+    logger.warning(f"Material '{material.name}' has no thermal data, assuming R = 0")
+    return 0.0
+
+
+def calculate_layer_lca_impact(material: Material, thickness_m: float) -> float:
+    """Calculate Life Cycle Assessment (A1-A3 GWP) for a single layer.
+    
+    Calculates environmental impact based on material unit basis.
+    
+    Args:
+        material: Material object with LCA properties
+        thickness_m: Layer thickness in meters
+    
+    Returns:
+        LCA impact in kg CO₂-eq/m²
+    """
+    base_impact = 0.0
+    
+    if material.lca_unit == 'm3':
+        # Impact per cubic meter
+        base_impact = material.gwp_a1a3 * thickness_m
+        # logger.debug(f"LCA (m3): {material.name} = {material.gwp_a1a3} * {thickness_m} = {base_impact:.3f}")
+        
+    elif material.lca_unit == 'm2':
+        # Impact per square meter (thickness independent)
+        base_impact = material.gwp_a1a3 * 1.0
+        # logger.debug(f"LCA (m2): {material.name} = {material.gwp_a1a3:.3f}")
+        
+    elif material.lca_unit == 'kg':
+        # Impact per kilogram
+        if material.density:
+            mass_kg = material.density * thickness_m
+            base_impact = material.gwp_a1a3 * mass_kg
+            # logger.debug(f"LCA (kg): {material.name} = {material.gwp_a1a3} * {material.density} * {thickness_m} = {base_impact:.3f}")
+        else:
+            logger.warning(f"Missing density for kg-based material '{material.name}', impact = 0")
+            base_impact = 0.0
+    
+    final_impact = base_impact * material.factor
+    
+    # if material.factor != 1.0:
+    #     logger.debug(f"Applying factor {material.factor}: {base_impact:.3f} * {material.factor} = {final_impact:.3f}")
+            
+    return final_impact
 
 
 # --- Unit Testing Suite ---
