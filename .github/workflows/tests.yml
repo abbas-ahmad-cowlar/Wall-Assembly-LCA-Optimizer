@@ -1,0 +1,35 @@
+name: Tests
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.8"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas
+
+      - name: Run validation tests
+        run: |
+          python validation.py
+
+      - name: Check code style (optional)
+        run: |
+          pip install black ruff
+          black --check .
+          ruff check .
+        continue-on-error: true
