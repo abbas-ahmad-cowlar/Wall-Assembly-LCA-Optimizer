@@ -5,7 +5,7 @@ rules, and creating Material objects for use in the optimization engine.
 
 Key responsibilities:
 - Parse JSON files from layers/ directory
-- Normalize units (Tonne → kg)
+- Normalize units (Tonne -> kg)
 - Handle empty thickness_range arrays
 - Detect and flag thin foils
 - Apply data validation rules
@@ -17,7 +17,7 @@ import pathlib
 import pandas as pd
 import logging
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 
 from logging_config import get_logger
 
@@ -88,18 +88,11 @@ def load_data(folder_path=None) -> List[Material]:
     Raises:
         FileNotFoundError: If folder_path doesn't exist.
         ValueError: If no JSON files found or critical data is missing.
-    
-    Example:
-        >>> materials = load_data()
-        >>> print(f"Loaded {len(materials)} materials")
-        Loaded 81 materials
     """
     if folder_path is None:
         folder_path = DATA_FOLDER
     
     logger.info(f"Loading material data from: {folder_path}")
-    
-    all_materials = []
     
     # Validate folder exists
     folder_path = pathlib.Path(folder_path)
@@ -120,6 +113,8 @@ def load_data(folder_path=None) -> List[Material]:
     
     logger.info(f"Found {len(files)} JSON files. Processing...")
     
+    all_materials = []
+    
     for filename in files:
         prefix = filename[:2]
         if prefix not in LAYER_MAP:
@@ -127,47 +122,60 @@ def load_data(folder_path=None) -> List[Material]:
             continue
             
         layer_idx = LAYER_MAP[prefix]
-        
-        # Handle both string and Path objects
-        if isinstance(folder_path, pathlib.Path):
-            filepath = folder_path / filename
-        else:
-            filepath = os.path.join(folder_path, filename)
+        filepath = folder_path / filename
         
         try:
-            with open(str(filepath), 'r', encoding='utf-8') as f:
-                data = json.load(f)
-            logger.debug(f"Successfully read {filename}")
-        except json.JSONDecodeError as e:
-            logger.error(f"Invalid JSON in {filename}: {e}")
-            continue
+            materials = _process_single_file(filepath, filename, layer_idx)
+            all_materials.extend(materials)
         except Exception as e:
-            logger.error(f"Error reading {filename}: {e}", exc_info=True)
+            logger.error(f"Failed to process {filename}: {e}", exc_info=True)
             continue
-
-        # Navigate the JSON structure
-        root_content = data.get("Components", {})
-        if not root_content:
-            logger.warning(f"No 'Components' found in {filename}")
-            continue
-            
-        # Process each material in the layer
-        materials_in_layer = 0
-        for category_key, materials_dict in root_content.items():
-            for mat_name, props in materials_dict.items():
-                
-                try:
-                    material = _parse_material(mat_name, props, layer_idx)
-                    all_materials.append(material)
-                    materials_in_layer += 1
-                except Exception as e:
-                    logger.error(f"Error parsing material '{mat_name}' in {filename}: {e}")
-                    continue
-        
-        logger.debug(f"Layer {layer_idx} ({filename}): Loaded {materials_in_layer} materials")
 
     logger.info(f"Successfully loaded {len(all_materials)} materials across {len(files)} layers")
     return all_materials
+
+
+def _process_single_file(filepath: pathlib.Path, filename: str, layer_idx: int) -> List[Material]:
+    """Read and parse a single JSON material file.
+    
+    Args:
+        filepath: Full path to the file
+        filename: Name of the file (for logging)
+        layer_idx: Layer index (0-8)
+        
+    Returns:
+        List of parsed Material objects from this file
+    """
+    materials = []
+    
+    try:
+        with open(str(filepath), 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        logger.debug(f"Successfully read {filename}")
+    except json.JSONDecodeError as e:
+        logger.error(f"Invalid JSON in {filename}: {e}")
+        return []
+
+    # Navigate the JSON structure
+    root_content = data.get("Components", {})
+    if not root_content:
+        logger.warning(f"No 'Components' found in {filename}")
+        return []
+        
+    # Process each material in the layer
+    materials_count = 0
+    for category_key, materials_dict in root_content.items():
+        for mat_name, props in materials_dict.items():
+            try:
+                material = _parse_material(mat_name, props, layer_idx)
+                materials.append(material)
+                materials_count += 1
+            except Exception as e:
+                logger.error(f"Error parsing material '{mat_name}' in {filename}: {e}")
+                continue
+    
+    logger.debug(f"Layer {layer_idx} ({filename}): Loaded {materials_count} materials")
+    return materials
 
 
 def _parse_material(mat_name: str, props: dict, layer_idx: int) -> Material:
@@ -190,7 +198,7 @@ def _parse_material(mat_name: str, props: dict, layer_idx: int) -> Material:
         logger.debug(f"Material '{mat_name}' has null factor, defaulting to 1.0")
         factor = 1.0
     
-    # Handle Unit Normalization (Tonne → Kg)
+    # Handle Unit Normalization (Tonne -> Kg)
     raw_unit = props.get("unit", "m2")
     a1a3_raw = props.get("A1-A3")
     
@@ -207,7 +215,7 @@ def _parse_material(mat_name: str, props: dict, layer_idx: int) -> Material:
         final_unit = "kg"
         final_gwp = final_gwp * 1000.0  # Convert impact per tonne to per kg
     
-    # Handle Thickness (Convert mm → m)
+    # Handle Thickness (Convert mm -> m)
     t_init_mm = props.get("thickness_init", 0)
     t_range_mm = props.get("thickness_range")
     

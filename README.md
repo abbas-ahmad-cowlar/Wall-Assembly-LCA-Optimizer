@@ -69,6 +69,26 @@ This optimizer implements a two-phase algorithm:
 | `layers/`           | Directory containing 9 JSON files (material database, one per wall layer)                |
 | `outputs/`          | Timestamped results directory (runs/, reports/, logs/)                                   |
 | `archive/`          | Reference materials and historical documentation                                         |
+| `config.py`         | Centralized configuration constants (ISO values, optimization targets)                   |
+
+---
+
+## 🔧 Configuration
+
+The project is fully configurable via `config.py`. You can adjust:
+
+- **Optimization Targets**: `TARGET_U` (default 0.14) and `TOLERANCE` (default 0.10)
+- **Physics Constants**: `R_SI` and `R_SE` (surface resistances)
+- **Calculated Constraint Ranges**: Automatically derived from targets
+
+To adapt the tool for a different climate zone (e.g., Target U=0.20), simply edit `config.py`:
+
+```python
+TARGET_U = 0.20  # New target
+TOLERANCE = 0.05 # Stricter 5% tolerance
+```
+
+All validation logic and optimization constraints will update automatically.
 
 ---
 

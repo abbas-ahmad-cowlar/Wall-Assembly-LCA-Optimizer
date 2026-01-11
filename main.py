@@ -14,28 +14,34 @@ import os
 import logging
 import datetime
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, Tuple, Optional
+
 from data_loader import load_data, Material
-from physics import WallAssembly, R_SI, R_SE
+from physics import (
+    WallAssembly, 
+    calculate_layer_r_value, 
+    calculate_layer_lca_impact
+)
+from config import R_SI, R_SE, TARGET_U, TOLERANCE
 from optimizer import run_optimization, Candidate
 from logging_config import setup_logging, get_logger
 
 logger = get_logger(__name__)
 
 
-def clear_screen():
+def clear_screen() -> None:
     """Clear the terminal screen (cross-platform)."""
     os.system('cls' if os.name == 'nt' else 'clear')
 
 
-def print_header():
+def print_header() -> None:
     """Print the application header."""
     print("="*60)
     print("      WALL ASSEMBLY LCA OPTIMIZER & DESIGN TOOL")
     print("="*60)
 
 
-def display_wall_status(assembly: List[Candidate]):
+def display_wall_status(assembly: List[Candidate]) -> None:
     """Display current wall assembly with thermal and environmental metrics.
     
     Shows a formatted table with:
@@ -51,43 +57,49 @@ def display_wall_status(assembly: List[Candidate]):
     print(f"{'ID':<4} {'Layer Name':<25} {'Material':<30} {'Thick(mm)':<10} {'R-Val':<8} {'LCA':<8}")
     print("-" * 90)
     
-    total_r = 0.0
-    total_lca = 0.0
+    total_r_value = 0.0
+    total_lca_impact = 0.0
     
-    for i, c in enumerate(assembly):
-        mat_name = c.material.name[:28]
+    for i, candidate in enumerate(assembly):
+        material_name = candidate.material.name[:28]
         layer_name = f"Layer {i}"
-        thick_mm = c.thickness * 1000
+        thickness_mm = candidate.thickness * 1000
         
-        print(f"{i:<4} {layer_name:<25} {mat_name:<30} {thick_mm:<10.1f} {c.r_val:<8.3f} {c.lca_val:<8.3f}")
+        print(
+            f"{i:<4} {layer_name:<25} {material_name:<30} "
+            f"{thickness_mm:<10.1f} {candidate.r_val:<8.3f} {candidate.lca_val:<8.3f}"
+        )
         
-        total_r += c.r_val
-        total_lca += c.lca_val
+        total_r_value += candidate.r_val
+        total_lca_impact += candidate.lca_val
 
     # Physics Summary
-    u_val = 1.0 / (R_SI + total_r + R_SE)
+    u_value = 1.0 / (R_SI + total_r_value + R_SE)
     
     print("-" * 90)
-    print(f"{'TOTALS':<61} {'R=' + str(round(total_r,2)):<10} {total_lca:.3f}")
+    print(f"{'TOTALS':<61} {'R=' + str(round(total_r_value, 2)):<10} {total_lca_impact:.3f}")
     print("=" * 90)
     
     # Status Check
     print(f"\n>> PHYSICS CHECK:")
-    print(f"   Total LCA Impact: {total_lca:.4f} kg CO2-eq/m²")
-    print(f"   U-Value:          {u_val:.4f} W/(m²K)")
+    print(f"   Total LCA Impact: {total_lca_impact:.4f} kg CO2-eq/m²")
+    print(f"   U-Value:          {u_value:.4f} W/(m²K)")
     
-    # Validation
-    if 0.126 <= u_val <= 0.154:
-        print(f"   Status:           [PASS] (Target 0.14 ± 10%)")
-        logger.info(f"Wall validates: U={u_val:.4f}, LCA={total_lca:.4f}")
+    # Validation against config constants
+    u_min = TARGET_U * (1 - TOLERANCE)
+    u_max = TARGET_U * (1 + TOLERANCE)
+    
+    if u_min <= u_value <= u_max:
+        print(f"   Status:           [PASS] (Target {TARGET_U} ± {TOLERANCE*100:.0f}%)")
+        logger.info(f"Wall validates: U={u_value:.4f}, LCA={total_lca_impact:.4f}")
     else:
-        diff = u_val - 0.14
+        diff = u_value - TARGET_U
         direction = "HIGH" if diff > 0 else "LOW"
         print(f"   Status:           [FAIL] {direction} by {abs(diff):.4f}")
-        logger.warning(f"Wall fails validation: U={u_val:.4f} (target 0.14 ±10%)")
+        logger.warning(f"Wall fails validation: U={u_value:.4f} (target {TARGET_U} ±{TOLERANCE*100:.0f}%)")
 
 
-def save_results(current_wall: List[Candidate], output_dir="outputs") -> Tuple[Path, Path]:
+def save_results(current_wall: List[Candidate], output_dir: str = "outputs") -> Tuple[Path, Path]:
     """Save wall assembly results with timestamp.
     
     Creates two files:
@@ -100,9 +112,6 @@ def save_results(current_wall: List[Candidate], output_dir="outputs") -> Tuple[P
     
     Returns:
         Tuple of (raw_file_path, report_file_path)
-        
-    Raises:
-        IOError: If unable to create directories or write files
     """
     logger.info("Saving optimization results...")
     
@@ -133,7 +142,7 @@ def save_results(current_wall: List[Candidate], output_dir="outputs") -> Tuple[P
     return raw_file, report_file
 
 
-def _generate_report(current_wall: List[Candidate], output_file: Path):
+def _generate_report(current_wall: List[Candidate], output_file: Path) -> None:
     """Generate formatted markdown report of wall assembly.
     
     Args:
@@ -150,7 +159,7 @@ Generated: {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
 ## Summary
 - **U-Value:** {u_val:.4f} W/(m²K)
 - **Total R-Value:** {total_r:.3f} m²K/W
-- **Total LCA Impact:** {total_lca:.3f} kg CO₂-eq/m²
+- **Total LCA Impact:** {total_lca:.3f} kg CO2-eq/m²
 
 ## Layer Breakdown
 
@@ -161,9 +170,13 @@ Generated: {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
     for i, c in enumerate(current_wall):
         report += f"| {i} | {c.material.name[:40]} | {c.thickness*1000:.1f} | {c.r_val:.3f} | {c.lca_val:.3f} |\n"
     
+    # Config-based validation
+    u_min = TARGET_U * (1 - TOLERANCE)
+    u_max = TARGET_U * (1 + TOLERANCE)
+    
     report += f"\n## Validation\n"
-    if 0.126 <= u_val <= 0.154:
-        report += "✅ **PASS** - U-value within target range (0.14 ± 10%)\n"
+    if u_min <= u_val <= u_max:
+        report += f"✅ **PASS** - U-value within target range ({TARGET_U} ± {TOLERANCE*100:.0f}%)\n"
     else:
         report += f"❌ **FAIL** - U-value outside target range\n"
     
@@ -177,14 +190,8 @@ Generated: {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
     logger.debug(f"Report generated: {output_file}")
 
 
-def get_user_selection(options: List[tuple], prompt: str, min_val: int = 0, max_val: int = None) -> int:
+def get_user_selection(options: List[tuple], prompt: str, min_val: int = 0, max_val: Optional[int] = None) -> int:
     """Get validated user selection from a list of options.
-    
-    Handles input validation with helpful error messages for:
-    - Empty input
-    - Non-numeric input
-    - Out-of-range values
-    - Keyboard interrupt (Ctrl+C)
     
     Args:
         options: List of available options
@@ -200,35 +207,111 @@ def get_user_selection(options: List[tuple], prompt: str, min_val: int = 0, max_
     
     while True:
         try:
-            val = input(f"\n{prompt} ").strip()
+            val_str = input(f"\n{prompt} ").strip()
             
-            if not val:
+            if not val_str:
                 print(f"❌ Error: Please enter a number between {min_val} and {max_val}.")
                 continue
             
-            idx = int(val)
+            val_int = int(val_str)
             
-            if min_val <= idx <= max_val:
-                logger.debug(f"User selected: {idx}")
-                return idx
+            if min_val <= val_int <= max_val:
+                logger.debug(f"User selected: {val_int}")
+                return val_int
             else:
-                print(f"❌ Error: Selection must be between {min_val} and {max_val}. You entered: {idx}")
+                print(f"❌ Error: Selection must be between {min_val} and {max_val}. You entered: {val_int}")
         except ValueError:
-            print(f"❌ Error: '{val}' is not a valid number. Please enter an integer.")
+            print(f"❌ Error: '{val_str}' is not a valid number. Please enter an integer.")
         except KeyboardInterrupt:
             logger.info("User interrupted with Ctrl+C")
             print("\n\nExiting...")
-            exit(0)
+            sys.exit(0)
 
 
-def interactive_mode(current_wall: List[Candidate], all_materials: List[Material]):
-    """Run interactive mode for manual wall modification.
+def handle_modify_layer(current_wall: List[Candidate], all_materials: List[Material]) -> None:
+    """Handle user request to modify a specific layer.
     
-    Allows users to:
-    - View current wall status
-    - Modify individual layers
-    - Save results with timestamps
-    - Exit when finished
+    Args:
+        current_wall: List of Candidate objects (modified in-place)
+        all_materials: List of all available materials
+    """
+    try:
+        layer_idx_str = input("\nEnter Layer ID (0-8) to modify: ").strip()
+        
+        if not layer_idx_str:
+            print("❌ Error: Please enter a layer number.")
+            input("Press Enter to continue...")
+            return
+        
+        layer_idx = int(layer_idx_str)
+        
+        if not (0 <= layer_idx <= 8):
+            print(f"❌ Error: Layer ID must be between 0 and 8. You entered: {layer_idx}")
+            input("Press Enter to continue...")
+            return
+        
+        logger.info(f"User modifying layer {layer_idx}")
+            
+    except ValueError:
+        print(f"❌ Error: '{layer_idx_str}' is not a valid number.")
+        input("Press Enter to continue...")
+        return
+        
+    # Find materials for this layer
+    valid_materials = [m for m in all_materials if m.layer_index == layer_idx]
+    
+    # Generate options
+    options = []
+    for material in valid_materials:
+        if len(material.thickness_options) == 0:
+             continue
+
+        for thickness in material.thickness_options:
+            # Use standalone calculation functions (No Dummy Wall!)
+            r_val = calculate_layer_r_value(material, thickness)
+            lca_val = calculate_layer_lca_impact(material, thickness)
+            
+            options.append(Candidate(material, thickness, r_val, lca_val))
+    
+    if not options:
+        print("No options found for this layer.")
+        return
+
+    # Display options
+    print(f"\n--- Options for Layer {layer_idx} ---")
+    print(f"{'ID':<4} {'Material':<30} {'Thick(mm)':<10} {'R-Val':<8} {'LCA':<8}")
+    for i, opt in enumerate(options):
+        print(
+            f"{i:<4} {opt.material.name[:28]:<30} "
+            f"{opt.thickness*1000:<10.1f} {opt.r_val:<8.3f} {opt.lca_val:<8.3f}"
+        )
+        
+    # Apply change
+    selected_index = get_user_selection(options, "Select new option ID:")
+    new_candidate = options[selected_index]
+    
+    current_wall[layer_idx] = new_candidate
+    logger.info(f"Layer {layer_idx} updated to: {new_candidate.material.name} ({new_candidate.thickness*1000:.1f}mm)")
+    print("✓ Layer updated!")
+    input("Press Enter to continue...")
+
+
+def handle_save_report(current_wall: List[Candidate]) -> None:
+    """Handle user request to save results."""
+    logger.info("User saving results...")
+    try:
+        raw_file, report_file = save_results(current_wall)
+        print(f"\n✓ Results saved successfully!")
+        print(f"  Raw data: {raw_file.name}")
+        print(f"  Report:   {report_file.name}")
+    except Exception as e:
+        logger.error(f"Error saving results: {e}", exc_info=True)
+        print(f"❌ Error: {e}")
+    input("Press Enter to continue...")
+
+
+def interactive_mode(current_wall: List[Candidate], all_materials: List[Material]) -> None:
+    """Run interactive mode for manual wall modification.
     
     Args:
         current_wall: List of 9 Candidate objects (initial optimal wall)
@@ -254,92 +337,28 @@ def interactive_mode(current_wall: List[Candidate], all_materials: List[Material
                 input("Press Enter to continue...")
                 continue
                 
-            if choice not in ['1', '2', '3']:
+            if choice == '3':
+                logger.info("User chose to exit")
+                print("Exiting...")
+                break
+                
+            elif choice == '2':
+                handle_save_report(current_wall)
+                
+            elif choice == '1':
+                handle_modify_layer(current_wall, all_materials)
+                
+            else:
                 print(f"❌ Error: '{choice}' is not valid. Please enter 1, 2, or 3.")
                 input("Press Enter to continue...")
-                continue
+                
         except KeyboardInterrupt:
             logger.info("User interrupted")
             print("\n\nExiting...")
             break
-        
-        if choice == '3':
-            logger.info("User chose to exit")
-            print("Exiting...")
-            break
-            
-        elif choice == '2':
-            logger.info("User saving results...")
-            try:
-                raw_file, report_file = save_results(current_wall)
-                print(f"\n✓ Results saved successfully!")
-                print(f"  Raw data: {raw_file.name}")
-                print(f"  Report: {report_file.name}")
-            except Exception as e:
-                logger.error(f"Error saving results: {e}", exc_info=True)
-                print(f"❌ Error: {e}")
-            input("Press Enter to continue...")
-            
-        elif choice == '1':
-            # Layer selection
-            try:
-                l_idx_str = input("\nEnter Layer ID (0-8) to modify: ").strip()
-                
-                if not l_idx_str:
-                    print("❌ Error: Please enter a layer number.")
-                    input("Press Enter to continue...")
-                    continue
-                
-                l_idx = int(l_idx_str)
-                
-                if not (0 <= l_idx <= 8):
-                    print(f"❌ Error: Layer ID must be between 0 and 8. You entered: {l_idx}")
-                    input("Press Enter to continue...")
-                    continue
-                
-                logger.info(f"User modifying layer {l_idx}")
-                    
-            except ValueError:
-                print(f"❌ Error: '{l_idx_str}' is not a valid number.")
-                input("Press Enter to continue...")
-                continue
-            except KeyboardInterrupt:
-                logger.info("User interrupted")
-                print("\n\nExiting...")
-                break
-                
-            # Find materials for this layer
-            valid_mats = [m for m in all_materials if m.layer_index == l_idx]
-            
-            # Generate options
-            options = []
-            for m in valid_mats:
-                if len(m.thickness_options) == 0:
-                     continue
-
-                for t in m.thickness_options:
-                    dummy_wall = WallAssembly([])
-                    r = dummy_wall.calculate_r_value(m, t)
-                    lca = dummy_wall.calculate_layer_lca(m, t)
-                    options.append(Candidate(m, t, r, lca))
-            
-            # Display options
-            print(f"\n--- Options for Layer {l_idx} ---")
-            print(f"{'ID':<4} {'Material':<30} {'Thick(mm)':<10} {'R-Val':<8} {'LCA':<8}")
-            for i, opt in enumerate(options):
-                print(f"{i:<4} {opt.material.name[:28]:<30} {opt.thickness*1000:<10.1f} {opt.r_val:<8.3f} {opt.lca_val:<8.3f}")
-                
-            # Apply change
-            sel_idx = get_user_selection(options, "Select new option ID:")
-            new_candidate = options[sel_idx]
-            
-            current_wall[l_idx] = new_candidate
-            logger.info(f"Layer {l_idx} updated to: {new_candidate.material.name} ({new_candidate.thickness*1000:.1f}mm)")
-            print("✓ Layer updated!")
-            input("Press Enter to continue...")
 
 
-def main():
+def main() -> None:
     """Main entry point for the wall assembly optimizer."""
     # Setup logging with file output
     log_file = Path("outputs/logs") / f"optimizer_{datetime.datetime.now().strftime('%Y-%m-%d')}.log"
@@ -363,7 +382,7 @@ def main():
         print("\n❌ Critical Error: Optimizer found no valid wall assembly.")
         print("   This may indicate:")
         print("   - Insufficient materials in database")
-        print("   - U-value constraints too strict")
+        print(f"   - U-value constraints too strict (Target {TARGET_U})")
         print("   - Data quality issues")
         sys.exit(1)
     

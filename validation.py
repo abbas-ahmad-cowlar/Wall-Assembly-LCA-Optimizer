@@ -8,9 +8,10 @@ This module provides comprehensive testing of:
 Tests can be run standalone or imported into main.py for pre-flight checks.
 """
 
-import sys
 import logging
-from physics import WallAssembly, R_SI, R_SE
+import sys
+from physics import WallAssembly
+from config import R_SI, R_SE
 from data_loader import Material
 from logging_config import get_logger
 
