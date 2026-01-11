@@ -128,7 +128,7 @@ def save_results(current_wall: List[Candidate], output_dir: str = "outputs") -> 
     
     # Save raw data
     raw_file = runs_path / f"wall_{timestamp}.txt"
-    with open(raw_file, "w") as f:
+    with open(raw_file, "w", encoding="utf-8") as f:
         f.write(str(current_wall))
     
     logger.debug(f"Raw data saved to: {raw_file}")
@@ -184,7 +184,7 @@ Generated: {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
     report += f"- Interior (R_si): {R_SI} m²K/W\n"
     report += f"- Exterior (R_se): {R_SE} m²K/W\n"
     
-    with open(output_file, "w") as f:
+    with open(output_file, "w", encoding="utf-8") as f:
         f.write(report)
     
     logger.debug(f"Report generated: {output_file}")
