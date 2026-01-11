@@ -6,6 +6,10 @@ __pycache__/
 
 # Output files
 final_wall.txt
+outputs/runs/*
+outputs/reports/*
+outputs/logs/*
+!outputs/**/.gitkeep
 
 # Build artifacts
 dist/
