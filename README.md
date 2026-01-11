@@ -1,1 +1,0 @@
-# Wall-Assembly-LCA-Optimizer
