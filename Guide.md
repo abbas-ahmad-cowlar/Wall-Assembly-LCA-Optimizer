@@ -14,6 +14,7 @@
 6. [Data Structure & Flow](#6-data-structure--flow)
 7. [Presenting This Project](#7-presenting-this-project)
 8. [Future Enhancements](#8-future-enhancements)
+9. [Frequently Asked Questions (FAQs)](#9-frequently-asked-questions-faqs)
 
 ---
 
@@ -880,6 +881,121 @@ A: "Absolutely. The algorithm is general - it works for any multi-layer optimiza
 - Optimize for lifecycle (A1-A3 + B6 + C1-C4)
 - Include operational energy (heating/cooling)
 - Climate change scenarios
+
+## 9. Frequently Asked Questions (FAQs)
+
+### 9.1 Running the GUI Mode (For Non-Technical Users)
+
+If you prefer a **clean, visual interface** without all the processing text on the console, use the GUI mode:
+
+```bash
+python run_gui.py
+```
+
+**The application has 3 pages in a single window:**
+
+**Page 1 - Progress** (shows automatically when you start):
+
+- Displays loading steps: Loading Data → Processing → Optimizing → Complete
+- Progress bar shows advancement
+
+**Page 2 - Results** (appears after optimization completes):
+
+- **Metric cards**: U-Value, Total LCA, R-Value, Pass/Fail status
+- **Layer table**: All 9 layers with aligned columns
+- **Quick Edit buttons**: `L0`, `L1`, `L2`... for fast layer editing
+- **Double-click** any row to edit that layer
+- **Changed rows** are highlighted in green
+- **Buttons**: Re-Optimize, Save Report, Exit, Reset All Changes
+
+**Page 3 - Edit Layer** (when you click Edit):
+
+- Left panel shows **current values** (material, thickness, R-value, LCA)
+- Right panel shows **all available options** with live preview
+- Select an option → preview updates → click Apply
+
+**No confusing console output** - just organized results in a clean window!
+
+---
+
+### 9.2 Why Are There Multiple Python Files?
+
+You might wonder: _"Why not just one `main.py` file?"_
+
+**Answer**: Having multiple files is the **professional standard** in software development. Here's why:
+
+| Single File Approach ❌      | Modular Approach ✅                     |
+| ---------------------------- | --------------------------------------- |
+| 1000+ lines in one file      | Each file has a clear purpose           |
+| Hard to find specific code   | Easy to navigate                        |
+| Changes can break everything | Changes are isolated                    |
+| Difficult to test            | Each module can be tested independently |
+| Looks amateur                | Industry best practice                  |
+
+**Our Module Structure**:
+
+| File                | Purpose                               |
+| ------------------- | ------------------------------------- |
+| `main.py`           | User interface (interactive mode)     |
+| `run_gui.py`        | User interface (GUI window mode)      |
+| `optimizer.py`      | Core optimization algorithm           |
+| `physics.py`        | Thermal and LCA calculations          |
+| `data_loader.py`    | Reading and parsing JSON files        |
+| `config.py`         | All configurable constants            |
+| `validation.py`     | Automated testing (quality assurance) |
+| `logging_config.py` | Logging setup                         |
+
+**Benefits**:
+
+1. **Maintainability**: If there's a bug in the physics calculations, you know exactly where to look (`physics.py`)
+2. **Reusability**: You can use `optimizer.py` in other projects without copying everything
+3. **Collaboration**: Multiple people can work on different files without conflicts
+4. **Testing**: Each module can be tested independently
+5. **Professional**: This is how real-world software is structured
+
+**Bottom Line**: All files are necessary and work together. You only need to run `main.py` or `run_gui.py` - the rest are supporting modules.
+
+---
+
+### 9.3 Can I Modify the JSON Files?
+
+**Yes!** The JSON files in `layers/` can be safely modified. The tool dynamically reads them each time it runs.
+
+**What You Can Safely Change**:
+
+| Change                  | Safe?  | Notes                         |
+| ----------------------- | ------ | ----------------------------- |
+| Modify thickness values | ✅ Yes | Values are in **millimeters** |
+| Add new materials       | ✅ Yes | Follow the existing structure |
+| Change LCA/GWP values   | ✅ Yes | Update with real EPD data     |
+| Remove a material       | ✅ Yes | Tool will skip it             |
+| Change property values  | ✅ Yes | Tool reads dynamically        |
+
+**What to Avoid**:
+
+| Change                                                           | Risk                  |
+| ---------------------------------------------------------------- | --------------------- |
+| Deleting required fields (like `lambda_val` without `u_val_ref`) | ⚠️ May cause errors   |
+| Changing field names                                             | ❌ Will break parsing |
+| Invalid JSON syntax                                              | ❌ File won't load    |
+
+**Example - Adding a New Insulation**:
+
+```json
+{
+  "New Eco-Insulation": {
+    "lambda_val": 0.035,
+    "density": 45,
+    "thickness_init": 100,
+    "thickness_range": [80, 100, 120, 150],
+    "lca_unit": "m3",
+    "GWP_A1-A3": -120.5,
+    "factor": 1.0
+  }
+}
+```
+
+**After modifying**: Just run `python run_gui.py` or `python main.py` again - the tool will automatically use the updated data!
 
 ---
 
