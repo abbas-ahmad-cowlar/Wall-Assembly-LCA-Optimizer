@@ -6,19 +6,18 @@
 
 The goal of this project was to design a 9-layer architectural wall assembly that balances two competing constraints:
 
-1. **Thermal Performance (U-Value):** The wall must insulate well, meeting a strict target of ****.
+1. **Thermal Performance (U-Value):** The wall must insulate well, meeting a strict target of \*\*\*\*.
 2. **Environmental Impact (LCA):** The wall must have the lowest possible Global Warming Potential (GWP), measured in .
 
 ### The Computational Problem
 
 Manually calculating every possible combination of materials is impossible.
 
-* The wall has 9 layers.
-* Each layer has multiple material choices (e.g., Brick vs. Concrete Block).
-* Each material has multiple thickness options.
+- The wall has 9 layers.
+- Each layer has multiple material choices (e.g., Brick vs. Concrete Block).
+- Each material has multiple thickness options.
 
 If we estimate roughly 5 valid options per layer, the total number of combinations is:
-
 
 A human cannot calculate 1.9 million spreadsheets. This tool automates that process to find the mathematical minimum impact in under 1 second.
 
@@ -36,7 +35,8 @@ Real-world data is rarely perfect. This script handles three critical issues fou
 
 1. **Unit Standardization:** Some materials were measured in `Tonnes`, others in `kg`, and others in `m³`. This script converts everything into standard units so they can be compared fairly.
 2. **The "Foil" Logic:** Layer 2 contains thin foils (<1mm). These materials often lacked thermal conductivity data (). The script detects these and assigns them a thermal resistance of roughly zero (), preventing mathematical errors.
-3. **Fallback Rules:** Some materials (like Battens in Layer 8) had no thickness options listed. The script automatically assigns a default thickness so the optimization doesn't break.
+3. **Empty Thickness Ranges:** Some materials in the database have `thickness_range: []` (empty array). This isn't an error—these materials are available at only one thickness (`thickness_init`). The script automatically creates a single-element list `[thickness_init]` for these materials, allowing them to participate in optimization with fixed thickness.
+4. **Fallback Rules:** Some materials (like Battens in Layer 8) had no thickness options listed. The script automatically assigns a default thickness so the optimization doesn't break.
 
 ### Phase 2: The Physicist (`physics.py`)
 
@@ -47,12 +47,12 @@ This script calculates two numbers for every single layer:
 **A. Thermal Resistance (R-Value)**
 Formula: $R = \frac{\text{thickness}}{\text{thermal conductivity}(\lambda)}$
 
-* *Why?* Higher R-values mean better insulation. We sum the R-values of all 9 layers to get the total insulation.
+- _Why?_ Higher R-values mean better insulation. We sum the R-values of all 9 layers to get the total insulation.
 
 **B. Environmental Impact (LCA)**
 Formula: $\text{Impact} = \text{GWP (A1-A3)} \times \text{Quantity} \times \text{Factor}$
 
-* *Why?* This measures the carbon footprint. The "Quantity" depends on the unit type (Mass vs. Volume vs. Area).
+- _Why?_ This measures the carbon footprint. The "Quantity" depends on the unit type (Mass vs. Volume vs. Area).
 
 ### Phase 3: The Strategist (`optimizer.py`)
 
@@ -63,8 +63,8 @@ This script uses two advanced logic techniques:
 **Technique 1: Pareto Pruning**
 Imagine you have two insulation options for Layer 3:
 
-* **Option A:** Thickness 100mm, Impact 10 kg CO2.
-* **Option B:** Thickness 100mm, Impact 20 kg CO2.
+- **Option A:** Thickness 100mm, Impact 10 kg CO2.
+- **Option B:** Thickness 100mm, Impact 20 kg CO2.
 
 Option B is mathematically "dominated." It provides no benefit (same insulation) but costs twice as much carbon. The script deletes Option B immediately. This reduces the search space from 1.9 million to just a few thousand "efficient" options.
 
@@ -91,15 +91,15 @@ A negative LCA value indicates a **Climate Positive** wall. This happens because
 1. **Layer 3 (Cellulose Insulation):** Made from recycled paper/plant fiber.
 2. **Layer 7 (Wood Battens):** Made from timber.
 
-**The Science:** Trees absorb  from the atmosphere as they grow. When we use wood in construction, we are effectively storing that carbon in the building. In LCA methodology (A1-A3), this stored carbon is counted as a negative emission.
+**The Science:** Trees absorb from the atmosphere as they grow. When we use wood in construction, we are effectively storing that carbon in the building. In LCA methodology (A1-A3), this stored carbon is counted as a negative emission.
 In this optimized wall, the carbon stored in the wood layers is greater than the carbon emitted by manufacturing the concrete and steel layers.
 
 ### Verification (Trust but Verify)
 
 To ensure these results aren't a glitch, a separate script `validation.py` was created. It essentially performs a manual "napkin math" check on the final output.
 
-* It verified the U-value matches the ISO formula to 4 decimal places.
-* It confirmed the negative LCA matches the input data provided in the JSON files.
+- It verified the U-value matches the ISO formula to 4 decimal places.
+- It confirmed the negative LCA matches the input data provided in the JSON files.
 
 ---
 

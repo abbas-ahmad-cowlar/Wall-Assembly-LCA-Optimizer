@@ -1,11 +1,14 @@
 import json
 import os
+import pathlib
 import pandas as pd
 from dataclasses import dataclass, field
 from typing import List, Optional
 
 # --- Configuration ---
-DATA_FOLDER = "."  # Assumes JSON files are in the current directory
+# Resolve path relative to this file's location
+SCRIPT_DIR = pathlib.Path(__file__).parent.resolve()
+DATA_FOLDER = SCRIPT_DIR / "layers"
 # Map filename prefixes to Layer IDs (0-8) to ensure correct order
 LAYER_MAP = {
     "01": 0, "02": 1, "03": 2, "04": 3, "05": 4, 
@@ -29,11 +32,18 @@ class Material:
     def __repr__(self):
         return f"Mat(L{self.layer_index}, {self.name}, Unit={self.lca_unit})"
 
-def load_data(folder_path: str) -> List[Material]:
+def load_data(folder_path = None) -> List[Material]:
+    """Load material data from JSON files.
+    
+    Args:
+        folder_path: Optional path to data folder. Defaults to layers/ directory.
+    """
+    if folder_path is None:
+        folder_path = DATA_FOLDER
     all_materials = []
     
     # Get all JSON files sorted
-    files = sorted([f for f in os.listdir(folder_path) if f.endswith(".json")])
+    files = sorted([f for f in os.listdir(str(folder_path)) if f.endswith(".json")])
     
     print(f"Found {len(files)} JSON files. Processing...")
     
@@ -44,10 +54,14 @@ def load_data(folder_path: str) -> List[Material]:
             continue
             
         layer_idx = LAYER_MAP[prefix]
-        filepath = os.path.join(folder_path, filename)
+        # Handle both string and Path objects
+        if isinstance(folder_path, pathlib.Path):
+            filepath = folder_path / filename
+        else:
+            filepath = os.path.join(folder_path, filename)
         
         try:
-            with open(filepath, 'r', encoding='utf-8') as f:
+            with open(str(filepath), 'r', encoding='utf-8') as f:
                 data = json.load(f)
         except Exception as e:
             print(f"ERROR reading {filename}: {e}")

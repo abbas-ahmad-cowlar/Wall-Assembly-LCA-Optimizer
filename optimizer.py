@@ -103,7 +103,7 @@ def run_optimization():
     start_time = time.time()
     
     # 1. Load Data
-    all_mats = load_data(".")
+    all_mats = load_data()  # Uses default layers/ directory
     candidates_map = get_layer_candidates(all_mats)
     
     # 2. Divide & Conquer
