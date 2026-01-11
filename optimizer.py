@@ -138,13 +138,13 @@ def get_layer_candidates(materials: List[Material]) -> Dict[int, List[Candidate]
         
         reduction_pct = (1 - len(efficient)/len(candidates)) * 100 if candidates else 0
         logger.info(
-            f"Layer {layer_idx}: {len(candidates)} raw → {len(efficient)} efficient "
+            f"Layer {layer_idx}: {len(candidates)} raw -> {len(efficient)} efficient "
             f"({reduction_pct:.1f}% reduction)"
         )
     
     overall_reduction = (1 - total_efficient/total_raw) * 100
     logger.info(
-        f"Overall Pareto pruning: {total_raw} → {total_efficient} candidates "
+        f"Overall Pareto pruning: {total_raw} -> {total_efficient} candidates "
         f"({overall_reduction:.1f}% reduction)"
     )
     
@@ -200,7 +200,7 @@ def combine_layers(
     
     reduction = (1 - len(efficient_results)/len(results)) * 100 if results else 0
     logger.debug(
-        f"Pruned layers {layer_names}: {len(results)} → {len(efficient_results)} "
+        f"Pruned layers {layer_names}: {len(results)} -> {len(efficient_results)} "
         f"({reduction:.1f}% reduction)"
     )
     
@@ -239,11 +239,11 @@ def run_optimization() -> List[Candidate]:
     
     logger.info("Building Inner Wall (layers 0-4)...")
     inner_combos = combine_layers([0, 1, 2, 3, 4], candidates_map)
-    logger.info(f"  → {len(inner_combos)} efficient inner combinations")
+    logger.info(f"  -> {len(inner_combos)} efficient inner combinations")
 
     logger.info("Building Outer Wall (layers 5-8)...")
     outer_combos = combine_layers([5, 6, 7, 8], candidates_map)
-    logger.info(f"  → {len(outer_combos)} efficient outer combinations")
+    logger.info(f"  -> {len(outer_combos)} efficient outer combinations")
     
     # Phase 3: Merge & Filter
     logger.info("\n[Phase 3] Merging halves and filtering by U-value constraint...")
@@ -280,7 +280,7 @@ def run_optimization() -> List[Candidate]:
         u_val = 1.0 / (R_SI + r_sum + R_SE)
         
         logger.info("\n*** OPTIMAL WALL ASSEMBLY FOUND ***")
-        logger.info(f"Total LCA Impact: {min_total_lca:.4f} kg CO₂-eq/m²")
+        logger.info(f"Total LCA Impact: {min_total_lca:.4f} kg CO2-eq/m**2")
         logger.info(f"U-Value: {u_val:.4f} W/(m²K) (Target: 0.14 ±10%)")
         logger.info(f"Total R-Value: {r_sum:.3f} m²K/W")
         

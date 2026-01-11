@@ -69,7 +69,7 @@ class WallAssembly:
             in downstream calculations.
         """
         if material.is_foil:
-            logger.debug(f"Foil material '{material.name}': R ≈ 0")
+            logger.debug(f"Foil material '{material.name}': R ~= 0")
             return 0.0001  # Negligible resistance
         
         if material.lambda_val:
