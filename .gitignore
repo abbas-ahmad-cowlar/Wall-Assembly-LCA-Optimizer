@@ -2,3 +2,7 @@ Layers/__pycache__/data_loader.cpython-314.pyc
 Layers/__pycache__/physics.cpython-314.pyc
 Layers/__pycache__/optimizer.cpython-314.pyc
 Layers/final_wall.txt
+Main_codebase/final_wall.txt
+Main_codebase/__pycache__/data_loader.cpython-314.pyc
+Main_codebase/__pycache__/optimizer.cpython-314.pyc
+Main_codebase/__pycache__/physics.cpython-314.pyc
