@@ -1,8 +1,29 @@
-Layers/__pycache__/data_loader.cpython-314.pyc
-Layers/__pycache__/physics.cpython-314.pyc
-Layers/__pycache__/optimizer.cpython-314.pyc
-Layers/final_wall.txt
-Main_codebase/final_wall.txt
-Main_codebase/__pycache__/data_loader.cpython-314.pyc
-Main_codebase/__pycache__/optimizer.cpython-314.pyc
-Main_codebase/__pycache__/physics.cpython-314.pyc
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Output files
+final_wall.txt
+outputs/runs/*
+outputs/reports/*
+outputs/logs/*
+!outputs/**/.gitkeep
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
+.eggs/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
